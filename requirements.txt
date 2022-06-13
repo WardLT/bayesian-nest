@@ -1,0 +1,6 @@
+python-nest>4
+pandas==1.1.*
+pydantic
+pyyaml
+pydantic==1.9.*
+google-api-python-client>2
