@@ -1,13 +1,16 @@
 """Connection to the Nest API for extracting HVAC status information"""
 from datetime import datetime
+from threading import Thread
 from pathlib import Path
 from enum import Enum
 import logging
 import json
 
-
+from google.cloud.pubsub_v1.subscriber.message import Message
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+from google.auth import jwt
+from google.cloud import pubsub_v1
 from pydantic import BaseModel, Field
 
 from bayesnest.base import BaseMonitor
@@ -16,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 # Configuration from the Device Access Console
 project_id = 'TBD'
+
+# Configuration for the subscription thread
+sub_name = 'TBD'
 
 # Verify the locations of the credentials paths
 _my_path = Path(__file__).parent
@@ -26,6 +32,10 @@ assert user_creds_path.is_file(), 'Follow https://developers.google.com/nest/dev
 app_creds_path = _my_path / 'creds' / 'google-sdm-service.json'
 assert user_creds_path.is_file(), 'Follow https://developers.google.com/nest/device-access/get-started to get keys' \
                                   ' for your Google API project, and store them in a file named google-sdm-service.json'
+pubsub_creds_path = _my_path / 'creds' / 'google-service-acct.json'
+assert user_creds_path.is_file(), 'Follow https://developers.google.com/nest/device-access/' \
+                                  'api/events#google-cloud-pubsub to create a service account. Save keys to' \
+                                  ' a file named google-service-acct.json'
 
 
 # Create a Google credential object
@@ -98,11 +108,54 @@ class ThermostatMonitor(BaseMonitor):
         super().__init__(name='nest', write_frequency=900)
 
         # Create the service endpoint
-        self.service = build('smartdevicemanagement', 'v1', credentials=_make_creds())
+        creds = _make_creds()
+        self.service = build('smartdevicemanagement', 'v1', credentials=creds)
 
         # If needed, determine the device information
         self.device_name = self._find_device()
         logger.info('Connected to service and found the desired device')
+
+        # Create a thread that watches the pubsub channel for events
+        pubsub_creds = jwt.Credentials.from_service_account_file(
+            pubsub_creds_path,
+            audience="https://pubsub.googleapis.com/google.pubsub.v1.Subscriber"
+        )
+        subscriber_client = pubsub_v1.SubscriberClient(credentials=pubsub_creds)
+
+        def callback(message: Message):
+            """Check if it is a thermostate event change, then trigger an update"""
+            # Load the data as JSON
+            data = json.loads(message.data)
+
+            # Get the trait that was updated
+            traits = data['resourceUpdate']['traits']
+            allowed_traits = ['ThermostatMode', 'ThermostatTemperatureSetpoint']
+            if any(t in traits for t in allowed_traits):
+                logger.info(f'Received a update the HVAC status.')
+                status = self.get_log_record()
+                self.write_log_line(status)
+            else:
+                logger.info(f'Received a update on the following traits: {list(traits)}')
+
+            # Acknowledge that we created it
+            message.ack()
+
+        def _infinite_watch():
+            """Process events until"""
+            logger.info(f'Started subscription thread to {sub_name}')
+            while True:
+                future = subscriber_client.subscribe(
+                    subscription=sub_name,
+                    callback=callback
+                )
+                try:
+                    future.result()
+                except KeyboardInterrupt:
+                    future.cancel()
+                    break
+
+        thr = Thread(target=_infinite_watch, daemon=True, name='nestevents')
+        thr.start()
 
     def _find_device(self) -> str:
         """Find the device associated with the provided credentials

@@ -23,17 +23,22 @@ I recommend that you install the package into a virtual environment using Anacon
 
 Once installed, you must register with Google to be able to access your Nest's data via an API.
 Follow the instructions on the ["Device Access" Tutorial](https://developers.google.com/nest/device-access/registration).
-During this procedure, you will download two different JSON files:
+During this procedure, you will need to:
 
 1. *Project ID*: You will create a Device Access project ID in the first step. Change the project ID in
-   [bayesest/thermo.py](./bayesnest/thermostat.py) to your project ID. 
+   [bayesnest/thermostat.py](./bayesnest/thermostat.py) to your project ID. 
 2. *OAuth 2.0 Client Information*. You will download a JSON file when 
    configuring [Google Cloud Platform during Step 1](https://developers.google.com/nest/device-access/get-started#set_up_google_cloud_platform).
    Save this file to `bayesnest/creds/google-sdm-service.json`.
 3. *Account Authorization Tokens*. You will download a set of keys via curl after authorizing your Google API Client
     to access your Google account. Save this JSON file to `./bayesnest/creds/google-sdm-user.json`.
-
-> **NOTE**: Do not share either of these JSON files with anyone!
+4. *Create a Service Account for Receiving Events*. Follow [these instructions](https://developers.google.com/nest/device-access/api/events#service_accounts).
+   Save the keys to `bayesnest/creds/google-smd-service.json`.
+5. *Enable events on your SDM Project and link them to Google Cloud Platform*. Follow
+   [these instructions](https://developers.google.com/nest/device-access/api/events#enable-events) and 
+   record the subscription name in [bayesnest/thermostat.py](./bayesnest/thermostat.py)
+ 
+> **NOTE**: Do not share any of these JSON files with anyone!
 
 #### Weather data
 
