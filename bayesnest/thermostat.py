@@ -128,14 +128,13 @@ class ThermostatMonitor(BaseMonitor):
             data = json.loads(message.data)
 
             # Get the trait that was updated
-            traits = data['resourceUpdate']['traits']
-            allowed_traits = ['ThermostatMode', 'ThermostatTemperatureSetpoint']
-            if any(t in traits for t in allowed_traits):
-                logger.info(f'Received a update the HVAC status.')
+            traits = [t.split('.')[-1] for t in data['resourceUpdate']['traits']]
+            logger.debug(f'Received a update on the following traits: {traits}')
+            allowed_traits = ['ThermostatHvac', 'ThermostatMode', 'ThermostatTemperatureSetpoint']
+            if any(t in allowed_traits for t in traits):
+                logger.info('Received a update the HVAC status.')
                 status = self.get_log_record()
                 self.write_log_line(status)
-            else:
-                logger.info(f'Received a update on the following traits: {list(traits)}')
 
             # Acknowledge that we created it
             message.ack()
