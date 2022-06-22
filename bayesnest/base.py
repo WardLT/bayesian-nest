@@ -64,7 +64,13 @@ class BaseMonitor(Thread, metaclass=ABCMeta):
     def run(self) -> None:
         """Write to log file as an infinite loop"""
         while True:
-            status = self.get_log_record()
+            try:
+                status = self.get_log_record()
+            except Exception as e:
+                # TODO (wardlt): Implement a backoff strategy
+                logger.warning(f'Received an error {e} while attempting. Sleep 15s and then restarting')
+                sleep(15)
+                continue
             self.write_log_line(status)
             logger.info(f'Successfully updated the {self.name} log')
             sleep(self.write_frequency)
